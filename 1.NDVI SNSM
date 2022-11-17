@@ -1,0 +1,167 @@
+//Importar área de estudio
+var Sierra = ee.FeatureCollection ('users/dilmillano/SIERRANEVADA');
+Map.addLayer(Sierra);
+Map.centerObject(Sierra,10);
+//Seleccionar la colección de imágenes
+var LANDSAT_8 = 'LANDSAT/LC08/C01/T1_SR';
+
+
+//Definir los cálculos a realizar
+//MASCARA DE NUBES LANDSAT 8
+//Eliminar nubes y sombras 
+var cloud_masks = require('users/fitoprincipe/geetools:cloud_masks');
+var options = ["cloud","shadow"]
+var landsatSRfunction = cloud_masks.landsatSR(options);
+
+
+
+//NDVI LANDSAT 8
+function addNDVI_L8(img) {
+  img = ee.Image(img) ;
+  var ndvi = img.normalizedDifference(['B5', 'B4']).rename(['ndvi']);
+  var img_ndvi = img.addBands(ndvi);
+  return img_ndvi;
+}
+//Definir los parametros 
+var ndviParameters ={palette:["red", "black","ddffbe", "147c33"],min:-0.3, max:0.8 };
+var realParameters8 = { min: 0,  max: 3000,gamma: 1.4,bands:['B4','B3','B2']};
+
+//Filtrar de acuerdo a los requerimientos
+
+//Año 2015 
+var Sierra2015 = ee.ImageCollection(LANDSAT_8)
+                     .filterBounds(Sierra)
+                     .filterDate("2015-01-01","2015-12-31")
+                     .map(landsatSRfunction)
+                     .map(addNDVI_L8)
+                     .median()
+
+                     ;
+Map.addLayer(Sierra2015.clip(Sierra) ,realParameters8,'Año 2015',false);
+Sierra2015= Sierra2015.select('ndvi');  
+Map.addLayer(Sierra2015.clip(Sierra),ndviParameters, 'NDVI 2015');
+
+//Año 2020
+var Sierra2020 = ee.ImageCollection(LANDSAT_8)
+                     .filterBounds(Sierra)
+                     .filterDate("2020-01-01","2020-12-31")
+                     .map(landsatSRfunction)
+                     .map(addNDVI_L8)
+                     .median()
+
+                     ;
+Map.addLayer(Sierra2020.clip(Sierra) ,realParameters8,'Año 2020',false);
+Sierra2020= Sierra2020.select('ndvi');  
+Map.addLayer(Sierra2020.clip(Sierra),ndviParameters, 'NDVI 2020');
+
+//Visualizar resultados
+//COBERTURA AÑO INICIAL
+
+Sierra2015= Sierra2015.select('ndvi');
+
+var sueloDesnudo1 = Sierra2015.lte(-0.1);
+var urbano1 = Sierra2015.gt(-0.1).and(Sierra2015.lte(0.2));
+var vegetacion1 = Sierra2015.gt(0.2).and(Sierra2015.lte(0.6));
+var vegetaciónVigorosa1 = Sierra2015.gt(0.6);
+
+//Mascaras
+var mascara_sueloDesnudo1= sueloDesnudo1
+          .updateMask(sueloDesnudo1);
+var mascara_urbano1=urbano1
+         .updateMask(urbano1);    
+var mascara_vegetacion1=vegetacion1
+         .updateMask(vegetacion1);  
+var mascara_vegetaciónVigorosa1=vegetaciónVigorosa1
+         .updateMask(vegetaciónVigorosa1);  
+         
+var mosaic1 = ee.ImageCollection
+([mascara_sueloDesnudo1.visualize({palette: ['red']}),
+ mascara_urbano1.visualize({palette: ['yellow']}),
+mascara_vegetacion1.visualize({palette: ['#c6ffcd']}),
+mascara_vegetaciónVigorosa1.visualize({palette: ['green']}),
+]).mosaic();
+Map.addLayer(mosaic1.clip(Sierra),{},'Clasificación NDVI 2015');
+
+
+
+//Calculo de área
+var area = ee.Image.pixelArea().divide(10000);
+
+//lake_mask = lake_mask.updateMask(lake_mask)
+
+mascara_sueloDesnudo1 = mascara_sueloDesnudo1.multiply(area).select([0],['Rocosas o Nevadas 2015']);
+mascara_urbano1 = mascara_urbano1.multiply(area).select([0],['Pobres en arbustos o pasturas 2015']);
+mascara_vegetacion1 = mascara_vegetacion1.multiply(area).select([0],['Vegetación 2015']);
+mascara_vegetaciónVigorosa1 = mascara_vegetaciónVigorosa1.multiply(area).select([0],['Vegetación vigorosa 2015']);
+
+
+
+var area_image1 = mascara_sueloDesnudo1
+                .addBands(mascara_urbano1)
+                .addBands(mascara_vegetacion1)
+                .addBands(mascara_vegetaciónVigorosa1);
+var areas1 = area_image1.reduceRegion({
+  reducer:ee.Reducer.sum(),
+  geometry: Sierra,
+  scale: 30,
+  maxPixels:1e13
+})
+print(areas1)
+
+
+
+
+//COBERTURA AÑO FINAL
+
+Sierra2020= Sierra2020.select('ndvi');
+
+var sueloDesnudo = Sierra2020.lte(-0.1);
+var urbano = Sierra2020.gt(-0.1).and(Sierra2020.lte(0.2));
+var vegetacion = Sierra2020.gt(0.2).and(Sierra2020.lte(0.6));
+var vegetaciónVigorosa = Sierra2020.gt(0.6);
+
+//Mascaras
+var mascara_sueloDesnudo= sueloDesnudo
+          .updateMask(sueloDesnudo);
+var mascara_urbano=urbano
+         .updateMask(urbano);    
+var mascara_vegetacion=vegetacion
+         .updateMask(vegetacion);  
+var mascara_vegetaciónVigorosa=vegetaciónVigorosa
+         .updateMask(vegetaciónVigorosa);  
+         
+var mosaic = ee.ImageCollection
+([mascara_sueloDesnudo.visualize({palette: ['red']}),
+ mascara_urbano.visualize({palette: ['yellow']}),
+mascara_vegetacion.visualize({palette: ['#c6ffcd']}),
+mascara_vegetaciónVigorosa.visualize({palette: ['green']}),
+]).mosaic();
+Map.addLayer(mosaic.clip(Sierra),{},'Clasificación NDVI 2020');
+
+
+
+//Calculo de área
+var area = ee.Image.pixelArea().divide(10000);
+
+//lake_mask = lake_mask.updateMask(lake_mask)
+
+mascara_sueloDesnudo = mascara_sueloDesnudo.multiply(area).select([0],['Rocosas o Nevadas 2020']);
+mascara_urbano = mascara_urbano.multiply(area).select([0],['Pobres en arbustos o pasturas 2020']);
+mascara_vegetacion = mascara_vegetacion.multiply(area).select([0],['Vegetación 2020']);
+mascara_vegetaciónVigorosa = mascara_vegetaciónVigorosa.multiply(area).select([0],['Vegetación vigorosa 2020']);
+
+
+
+var area_image = mascara_sueloDesnudo
+                .addBands(mascara_urbano)
+                .addBands(mascara_vegetacion)
+                .addBands(mascara_vegetaciónVigorosa);
+var areas = area_image.reduceRegion({
+  reducer:ee.Reducer.sum(),
+  geometry: Sierra,
+  scale: 30,
+  maxPixels:1e13
+})
+print(areas)
+
+
