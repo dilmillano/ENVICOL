@@ -1,0 +1,57 @@
+// Llamamos a la colección de imágenes y filtramos fechas de análisis
+var MODIS = ee.ImageCollection('MODIS/006/MOD13Q1')
+  .filterDate('2018-01-01', '2021-01-01')
+;
+
+// Hacemos una llamada a la banda del índice o lo componemos a través del juego de bandas
+var IndiceNDVI = MODIS.select(['NDVI']);
+
+// Definimos las coordenadas máximas y mínimas de visualización en el timelapse
+//var ZonaAOI = ee.Geometry.Rectangle({  coords: [[-89,-55], [-30,14]]});
+
+// Parametrizamos el timelapse con proyección, resolución, AOI, valores de pixel y frames/seg
+var Timelapse = {
+  crs: 'EPSG:4326',
+  dimensions: '600',
+  region: ZonaAOI,
+  min: -2000,
+  max: 10000,
+  palette: '4b2bce, 33fffe, fffa6c, 70d662,5eb553,3e7636,153d18',
+  framesPerSecond: 5,};
+
+// Creamos la animación con la colección de imagenes y parámetros del timelapses
+var Animacion = ui.Thumbnail({
+  image: IndiceNDVI ,
+  params: Timelapse,
+  style: {
+    position: 'bottom-right', 
+    width: '300px'}});
+Map.add(Animacion);
+
+// Adicionalmente visualizamos una imagen compuesta del timelapse sobre el visor
+var MODIS_Composicion = ee.Image(IndiceNDVI .median());
+Map.addLayer (MODIS_Composicion, {
+  min: -2000,
+  max: 10000,
+  palette: '4b2bce, 33fffe, fffa6c, 70d662,5eb553,3e7636,153d18',
+  bands: ['NDVI']}, 
+  'Indice NDVI');
+Map.centerObject(ZonaAOI, 7);
+
+// Declaramos una nueva variable bajo la que realizar composiciones RGB o índices
+var ComposicionRGB = { 
+  crs: 'EPSG:4326', // Asigna un sistema mediante código EPSG
+  min: -2000,
+  max: 10000,
+  palette: '4b2bce, 33fffe, fffa6c, 70d662,5eb553,3e7636,153d18',
+  bands: ['NDVI'],
+  framesPerSecond: 3, // Añade los frames por segundo para acelerar la animación
+  dimensions: '600',}; // Parametriza una dimensión máxima de tamaño del gif
+
+var MODIS = ee.ImageCollection('MODIS/006/MOD13Q1')
+  .filterDate('2018-01-01', '2021-01-01')
+  .map(function (image){return image.clip(ZonaAOI);});
+
+// Generamos el GIF animado del timelpase e imprimimos su URL para descarga
+var AnimacionGIF = MODIS.getVideoThumbURL (ComposicionRGB);
+print (AnimacionGIF);
