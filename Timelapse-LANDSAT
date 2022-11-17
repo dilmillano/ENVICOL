@@ -1,0 +1,54 @@
+// Declaramos una primera variable para obtener imagenes Landsat y filtramos las imágenes
+var ColeccionLandsat= ee.ImageCollection ('LANDSAT/LC08/C01/T1_RT') 
+  .filterBounds (geometry) //No olvides digitalizar la zona AOI en la que estás interesado
+  .filterDate ('2017-01-01', '2021-12-31') // Asigna una fecha para componer el timelapse
+  .filterMetadata ('CLOUD_COVER', 'Less_Than', 10) //Filtra las imágenes con exceso de nubes
+  .map(function (image){return image.clip(geometry);});
+
+// Declaramos una nueva variable bajo la que realizar composiciones RGB o índices
+var ComposicionRGB = { 
+  bands: ['B5','B4','B3'], // Realiza tu composición de imágenes
+  crs: 'EPSG:4326', // Asigna un sistema mediante código EPSG
+  min: 0.0,
+  max: 30000.0, // Juega con los valores de píxel para su representación más clara
+  framesPerSecond: 3, // Añade los frames por segundo para acelerar la animación
+  dimensions: '600',}; // Parametriza una dimensión máxima de tamaño del gif
+
+// Generamos el GIF animado del timelpase e imprimimos su URL para descarga
+var AnimacionGIF = ColeccionLandsat.getVideoThumbURL (ComposicionRGB);
+print (AnimacionGIF);
+
+// Generamos la secuencia de frames que forman el timelpase e imprimimos su URL para descarga
+var FramesPelicula = ColeccionLandsat.getFilmstripThumbURL (ComposicionRGB);
+print (FramesPelicula);
+
+
+var MODIS_ColorReal = ColeccionLandsat.select(['B4','B3','B2']);
+
+// Parametrizamos el timelapse con proyección, resolución, AOI, valores de pixel y frames/seg
+var Timelapse = {
+  crs: 'EPSG:4326',
+  dimensions: '600',
+  region: geometry,
+  min: 0.0,
+  max: 3000,
+  gamma: 1.4,
+  framesPerSecond: 4,};
+
+// Creamos la animación con la colección de imagenes y parámetros del timelapses
+var Animacion = ui.Thumbnail({
+  image: ColeccionLandsat,
+  params: Timelapse,
+  style: {
+    position: 'bottom-right', //'bottom-right','bottom-right'
+    width: '600px'}});
+Map.add(Animacion);
+
+// Adicionalmente visualizamos una imagen compuesta del timelapse sobre el visor
+var ColeccionLandsat = ee.Image(ColeccionLandsat.median());
+Map.addLayer (ColeccionLandsat, {
+  min: 0.0,
+  max: 3000.0,
+  gamma: 1.4,
+  bands: ['B4','B3','B2']},  'Imagen MODIS');
+Map.centerObject(geometry, 5);
